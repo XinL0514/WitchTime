@@ -1,0 +1,6 @@
+node_modules/
+.env
+test-results/
+midscene_run/
+.DS_Store
+*.tsbuildinfo
