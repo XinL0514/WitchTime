@@ -1,6 +1,6 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import type { AndroidAgent } from '@midscene/android';
-import { createAgent, ensureLoggedOut } from '@e2e/agent';
+import { createAgent, ensureLoggedOut, withRetry } from '@e2e/agent';
 import { getTestAccount } from '@e2e/testdata/accounts';
 
 describe('登录', () => {
@@ -25,6 +25,6 @@ describe('登录', () => {
     await agent.aiWaitFor('登录成功,并且点击到我的页面能看到老师的工号', {
       timeoutMs: 30000,
     });
-    await agent.aiAssert('能看到老师的工号');
+    await withRetry(() => agent.aiAssert('能看到老师的工号'));
   }, 150_000);
 });

@@ -10,6 +10,8 @@
   },
   "devDependencies": {
     "@midscene/android": "^1.10.11",
+    "@midscene/core": "^1.10.11",
+    "@midscene/shared": "^1.10.11",
     "@types/node": "^26.2.0",
     "vitest": "^4.1.10",
     "dotenv": "^17.4.2",

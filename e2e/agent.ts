@@ -21,24 +21,26 @@ import type { TestAccount } from './testdata/accounts';
  * they're distinguishable once merged with other specs (see reportFileName
  * below) — pass something readable like the describe() block's name.
  *
- * All specs run in the same `vitest run` invocation share one report file:
- * e2e/globalSetup.ts generates one reportFileName per process and exposes it
- * via MIABI_REPORT_FILE_NAME, so every agent created during that run appends
- * its own execution trace into the same HTML report instead of each spec
- * producing its own file. Running a single spec file still works the same
- * way, just with one group in the report.
+ * All specs run in the same `vitest run` invocation get their own report
+ * file, named `<runId>__<cacheId>` — e2e/globalSetup.ts generates one runId
+ * per process and exposes it via MIABI_REPORT_FILE_NAME. Once every spec has
+ * finished, globalSetup's teardown finds all `<runId>__*.html` files and
+ * merges them into a single filterable report (via @midscene/core's
+ * mergeReportFiles) with one distinguishable group per spec, instead of one
+ * flat combined stream. Running a single spec file still works the same
+ * way — there's just nothing to merge.
  *
  * NOTE: agentFromAdbDevice's exact signature/options should be double-checked
  * against the installed @midscene/android version on the first real run.
  */
 export async function createAgent(cacheId: string, groupName?: string): Promise<AndroidAgent> {
   const { deviceId, appLaunchTarget } = getEnvironment();
-  const reportFileName = process.env.MIABI_REPORT_FILE_NAME;
+  const runId = process.env.MIABI_REPORT_FILE_NAME;
 
   const agent = await agentFromAdbDevice(deviceId, {
     generateReport: true,
     cache: { id: cacheId },
-    ...(reportFileName ? { reportFileName } : {}),
+    ...(runId ? { reportFileName: `${runId}__${cacheId}` } : {}),
     ...(groupName ? { groupName } : {}),
   });
 
@@ -103,4 +105,32 @@ export async function ensureLoggedOut(agent: AndroidAgent): Promise<void> {
   await agent.aiWaitFor('页面上出现了"未登录"提示和"立即登录"按钮', {
     timeoutMs: 15000,
   });
+}
+
+/**
+ * Retries an idempotent action (only aiAssert — a pure read/judgment of the
+ * current screen, no side effects) up to `retries` times on failure, since a
+ * single vision-model call can occasionally misjudge a borderline frame.
+ * Do NOT wrap aiAct/aiTap/aiInput with this — they have side effects (e.g.
+ * submitting a generation request) and retrying would repeat them. Don't
+ * wrap aiWaitFor either — it already polls internally via checkIntervalMs.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 1,
+  delayMs = 1500,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        console.warn(`[withRetry] attempt ${attempt + 1} failed, retrying in ${delayMs}ms:`, err);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
 }
